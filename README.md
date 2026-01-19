@@ -4,7 +4,7 @@ This automated n8n workflow provides real-time financial risk assessments by com
 
 ## 🚀 Key Features
 - **Automated Data Ingestion:** Receives financial metrics via a secure Webhook API.
-- **Advanced Risk Engine:** Custom JavaScript nodes calculate solvency, leverage, and liquidity ratios.
+- **Advanced Risk Engine:** Custom JavaScript nodes calculate solvency, leverage, and liquidity ratios. 
 - **AI-Powered Insights:** Utilizes the **Groq Llama-3.1-8b** model to provide human-readable bankruptcy summaries and recovery recommendations.
 - **Structured JSON Output:** Uses a **Structured Output Parser** to ensure error-free data delivery for enterprise integration.
 
