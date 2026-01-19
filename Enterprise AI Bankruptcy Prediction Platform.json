@@ -1,0 +1,264 @@
+{
+  "name": "Enterprise AI Bankruptcy Prediction Platform",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bankruptcy-check",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "8184dcb9-f128-4702-979e-0681ec011ce8",
+      "name": "Webhook API (Frontend)",
+      "type": "n8n-nodes-base.webhook",
+      "position": [
+        -912,
+        224
+      ],
+      "typeVersion": 2.1,
+      "webhookId": "d5fedd9c-99cb-42c5-b7a3-a6ef54d1b64a"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Hum data ko .json.body se uthayenge kyunki n8n ne isi mein rakha hai\nconst d = items[0].json.body;\n\nconst schema = {\n  assets: 'number',\n  liabilities: 'number',\n  current_ratio: 'number',\n  debt_to_equity: 'number',\n  profit_margin: 'number',\n  cashflow: 'number'\n};\n\n// Check karein ke data empty toh nahi\nif (!d) throw new Error(\"No data received in webhook body\");\n\nfor (const key in schema) {\n  if (d[key] === undefined) throw new Error(`Missing field: ${key}`);\n  d[key] = Number(d[key]);\n  if (isNaN(d[key])) throw new Error(`Invalid value for ${key}`);\n}\n\nreturn [{ json: d }];"
+      },
+      "id": "f13eacb5-cdd7-417f-8864-af1e74dcefe5",
+      "name": "Input Validation & Sanitization",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        -688,
+        224
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "const d = items[0].json;\n\nconst features = {\n  solvency_ratio: (d.assets - d.liabilities) / d.assets,\n  leverage_ratio: d.liabilities / d.assets,\n  liquidity_flag: d.current_ratio < 1,\n  profitability_flag: d.profit_margin < 0,\n  cashflow_flag: d.cashflow < 0,\n  leverage_flag: d.debt_to_equity > 2\n};\n\nreturn [{ json: { input: d, features } }];"
+      },
+      "id": "a3bfb13d-aa41-4c61-a338-46d5973ccb92",
+      "name": "Financial Feature Engineering",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        -448,
+        224
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "functionCode": "const { input, features } = items[0].json;\n\nlet score = 0;\n\nif (features.leverage_ratio > 0.85) score += 25;\nif (features.liquidity_flag) score += 20;\nif (features.leverage_flag) score += 20;\nif (features.profitability_flag) score += 20;\nif (features.cashflow_flag) score += 15;\n\nconst probability = Math.min(95, score + 5);\n\nlet risk_level = 'Low';\nif (probability >= 40) risk_level = 'Moderate';\nif (probability >= 65) risk_level = 'High';\nif (probability >= 80) risk_level = 'Critical';\n\nconst prediction = probability >= 60 ? 'Bankrupt' : 'Stable';\n\nreturn [{ json: { ...input, ...features, risk_score: score, probability, risk_level, prediction } }];"
+      },
+      "id": "95d21460-dc65-45c2-aec8-6edcbc54db95",
+      "name": "Advanced ML Risk Engine",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        -192,
+        224
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"risk_score\": {{ $json.output.risk_score }},\n  \"risk_level\": \"{{ $json.output.risk_level }}\",\n  \"risk_factors\": \"{{ $json.output.risk_factors }}\",\n  \"ai_summary\": \"{{ $json.output.bankruptcy_detail }}\"\n}\n",
+        "options": {}
+      },
+      "id": "db80ac5e-7766-43ce-8f78-a8cc8ab34ef8",
+      "name": "Final Enterprise API Response",
+      "type": "n8n-nodes-base.set",
+      "position": [
+        1152,
+        176
+      ],
+      "typeVersion": 3.4
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a financial bankruptcy analysis assistant.\n\nRisk Score: {{$json.risk_score}}\nRisk Level: {{$json.risk_level}}\nKey Risk Factors: {{$json.risk_factors}}\n\nExplain the bankruptcy risk in simple terms and give short recommendations.\n",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        736,
+        0
+      ],
+      "id": "4ac803df-3cd2-443a-bc61-971aa49673ec",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        720,
+        256
+      ],
+      "id": "72320c9b-327b-4792-ae7a-ae2deb1b89d5",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "ZF0WBHSFIOU4S0oJ",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const riskScore = $json.risk_score;\n\nlet riskLevel = \"Low\";\n\nif (riskScore > 60) {\n  riskLevel = \"High\";\n} else if (riskScore > 30) {\n  riskLevel = \"Medium\";\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      risk_level: riskLevel\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        224
+      ],
+      "id": "118fc861-9b49-4efb-8324-c68c8e824733",
+      "name": "Risk Classification "
+    },
+    {
+      "parameters": {
+        "jsCode": "const factors = [];\n\nif ($json.debt_to_equity > 2) {\n  factors.push(\"High debt to equity ratio\");\n}\n\nif ($json.current_ratio < 1) {\n  factors.push(\"Poor liquidity position\");\n}\n\nif ($json.operating_cash_flow < 0) {\n  factors.push(\"Negative operating cash flow\");\n}\n\nreturn [\n  {\n    json: {\n      ...$json,\n      risk_factors: factors.slice(0, 3)\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        144
+      ],
+      "id": "c82b8fb7-4d5f-4b79-8b7e-fdb8f220d036",
+      "name": "Risk Factor Analyzer"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"risk_score\": 0,\n  \"risk_level\": \"string\",\n  \"risk_factors\": \"string\",\n  \"bankruptcy_detail\": \"string\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        880,
+        208
+      ],
+      "id": "075aaa3f-cd8d-45bb-88e9-7dd156560b52",
+      "name": "Structured Output Parser"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook API (Frontend)": {
+      "main": [
+        [
+          {
+            "node": "Input Validation & Sanitization",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Validation & Sanitization": {
+      "main": [
+        [
+          {
+            "node": "Financial Feature Engineering",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial Feature Engineering": {
+      "main": [
+        [
+          {
+            "node": "Advanced ML Risk Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advanced ML Risk Engine": {
+      "main": [
+        [
+          {
+            "node": "Risk Classification ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Final Enterprise API Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Classification ": {
+      "main": [
+        [
+          {
+            "node": "Risk Factor Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Risk Factor Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "ec3df9a9-0aaa-4d3a-9fad-db493bcfaed5",
+  "meta": {
+    "instanceId": "c32bdd15053317506f18a53f221cc8a196b31d14a1c6db11773d2c03a6ca400d"
+  },
+  "id": "atOK7HzU0hERBlAOz-hkp",
+  "tags": []
+}
